@@ -19,3 +19,11 @@ def load_threat_taxonomy() -> dict[str, Any]:
 
 def load_source_registry() -> dict[str, Any]:
     return load_json(SPECS_DIR / "source_registry.v1.json")
+
+
+def load_provider_rules() -> dict[str, Any]:
+    return load_json(SPECS_DIR / "provider_rules.v1.json")
+
+
+def load_provider_aliases() -> dict[str, Any]:
+    return load_json(SPECS_DIR / "provider_aliases.v1.json")

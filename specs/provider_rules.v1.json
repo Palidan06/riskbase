@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "name": "riskbase-provider-rules",
+  "updated_at": "2026-08-17T00:00:00Z",
+  "providers": {
+    "uk_fcdo_travel_advice": {
+      "advisory_patterns": [
+        {"regex": "against all travel", "severity": "critical"},
+        {"regex": "against all but essential travel", "severity": "high"},
+        {"regex": "exercise a high degree of caution", "severity": "elevated"},
+        {"regex": "take normal security precautions", "severity": "low"}
+      ],
+      "factor_patterns": {
+        "political_unrest": [
+          {"regex": "civil unrest|demonstrations?|protests?|riot", "severity": "elevated"},
+          {"regex": "violent (protests?|unrest)|widespread unrest", "severity": "high"}
+        ],
+        "violent_crime_kidnapping": [
+          {"regex": "kidnapp", "severity": "critical"},
+          {"regex": "violent crime|armed robbery|homicide", "severity": "high"}
+        ],
+        "terrorism_organized_violence": [
+          {"regex": "terroris|extremis|insurg", "severity": "critical"}
+        ],
+        "health_bio_environmental": [
+          {"regex": "outbreak|epidemic|cholera|public health", "severity": "high"}
+        ],
+        "infrastructure_transport": [
+          {"regex": "airport closures?|transport disruption|road closures?", "severity": "high"}
+        ]
+      }
+    },
+    "canada_travel_advisories": {
+      "advisory_patterns": [
+        {"regex": "avoid all travel", "severity": "critical"},
+        {"regex": "avoid non-essential travel", "severity": "high"},
+        {"regex": "exercise a high degree of caution", "severity": "elevated"},
+        {"regex": "take normal security precautions", "severity": "low"}
+      ],
+      "factor_patterns": {
+        "political_unrest": [
+          {"regex": "civil unrest|demonstrations?|protests?|riot", "severity": "elevated"},
+          {"regex": "violent (protests?|unrest)|widespread unrest", "severity": "high"}
+        ],
+        "violent_crime_kidnapping": [
+          {"regex": "kidnapp", "severity": "critical"},
+          {"regex": "violent crime|armed robbery|homicide", "severity": "high"}
+        ],
+        "terrorism_organized_violence": [
+          {"regex": "terroris|extremis|insurg", "severity": "critical"}
+        ],
+        "health_bio_environmental": [
+          {"regex": "outbreak|epidemic|cholera|public health", "severity": "high"}
+        ],
+        "infrastructure_transport": [
+          {"regex": "airport closures?|transport disruption|road closures?", "severity": "high"}
+        ]
+      }
+    }
+  }
+}

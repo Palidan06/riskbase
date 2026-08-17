@@ -3,7 +3,7 @@
 riskbase \- internal CLI for regional threat posture assessments
 .SH SYNOPSIS
 .B riskbase
-[\-LR] [\-NRT] [\-\-json] [\-\-explain-score] [\-O path]
+[\-LR] [\-NRT] [\-\-json] [\-\-explain-score] [\-\-strict-country-match] [\-\-no-strict-country-match] [\-\-debug-normalization] [\-\-debug-sources] [\-O path]
 [\-\-residence-country value]
 [\-\-clearance-level value]
 [\-\-agency value]
@@ -30,6 +30,18 @@ Output machine-readable JSON.
 .B \-\-explain-score
 Print weighted score contribution details.
 .TP
+.B \-\-strict-country-match
+Require canonical destination country match in at least two authoritative sources (default).
+.TP
+.B \-\-no-strict-country-match
+Disable strict country-match gating (not recommended).
+.TP
+.B \-\-debug-normalization
+Print destination normalization and provider query mappings.
+.TP
+.B \-\-debug-sources
+Print per-source fetch and parse diagnostics.
+.TP
 .B \-\-residence-country
 Country of residence input value.
 .TP
@@ -49,6 +61,8 @@ Destination city input value (optional).
 returns 0 on success and non-zero if execution fails.
 .SH SAFETY NOTICE
 RiskBase is decision-support tooling and must not be treated as sole authority for movement decisions.
+.SH VALIDATION DEFAULT
+Strict country matching is enabled by default. If fewer than two authoritative sources match the destination country, assessment is halted.
 .SH EXAMPLES
 .TP
 Quick posture:
@@ -59,3 +73,6 @@ Long report to file:
 .TP
 NRT enhanced JSON output:
 .B riskbase -NRT --json
+.TP
+Debug normalization and source status:
+.B riskbase --debug-normalization --debug-sources

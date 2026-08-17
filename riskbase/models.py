@@ -18,6 +18,7 @@ class UserInput:
     destination_city: str | None = None
     long_report: bool = False
     nrt_enabled: bool = False
+    strict_country_match: bool = True
 
 
 @dataclass
@@ -70,3 +71,5 @@ class AssessmentResult:
     summary: str
     recommendations: list[str]
     nrt_summary: str | None = None
+    source_debug: dict[str, dict[str, str]] = field(default_factory=dict)
+    normalization_debug: dict[str, str] = field(default_factory=dict)

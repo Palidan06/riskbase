@@ -30,7 +30,24 @@ riskbase
 riskbase -LR -O albania.txt
 riskbase -NRT --explain-score
 riskbase --json
+riskbase --debug-normalization --debug-sources
+riskbase --no-strict-country-match
 ```
+
+## Validation Defaults
+
+- Strict country matching is enabled by default.
+- RiskBase requires at least two authoritative sources to positively match the destination country before scoring.
+- To disable this gate for troubleshooting only, use:
+
+```bash
+riskbase --no-strict-country-match
+```
+
+## Debug Flags
+
+- `--debug-normalization` prints canonical destination normalization and provider query mappings.
+- `--debug-sources` prints per-source fetch/parse status and details.
 
 ## Man Page
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from riskbase.config import load_threat_taxonomy
 from riskbase.engine import run_assessment
@@ -62,19 +63,62 @@ class RiskBaseTests(unittest.TestCase):
             destination_city="Tirana",
             long_report=False,
             nrt_enabled=True,
+            strict_country_match=False,
         )
-        result = run_assessment(ui, show_progress=False)
+        now = utc_now_iso()
+        mocked_evidence = [
+            EvidenceItem(
+                source_id="mock_src_1",
+                source_name="Mock Source 1",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Mock advisory elevated.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="m1",
+            ),
+            EvidenceItem(
+                source_id="mock_src_2",
+                source_name="Mock Source 2",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Mock advisory corroboration.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="m2",
+            ),
+        ]
+        with patch(
+            "riskbase.engine.collect_baseline_evidence",
+            return_value=(mocked_evidence, {"mock_src_1": {"status": "ok"}}, {"canonical_destination_country": "albania"}),
+        ):
+            result = run_assessment(ui, show_progress=False)
         self.assertIn(result.posture, {"Low Concern", "Elevated Concern", "High Concern", "Critical Concern"})
         self.assertTrue(len(result.evidence) >= 1)
         self.assertTrue(len(result.validation) >= 1)
 
     def test_score_posture_mapping(self) -> None:
         taxonomy = load_threat_taxonomy()
+        ui = UserInput(
+            residence_country="US",
+            clearance_level="",
+            agency="X",
+            destination_country="Canada",
+        )
         score, posture, _ = score_assessment(
             evidence=[],
             validation=[],
             taxonomy=taxonomy,
             nrt_enabled=False,
+            user_input=ui,
         )
         self.assertEqual(score, 1.6)
         self.assertEqual(posture, "Low Concern")

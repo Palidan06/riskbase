@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .audit import write_audit_log
-from .engine import run_assessment
+from .engine import AssessmentError, run_assessment
 from .models import UserInput
 from .reporting import render_json, render_long_report, render_quick_report
 
@@ -16,12 +17,35 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-LR", "--long-report", action="store_true", help="Generate long report.")
     parser.add_argument("-NRT", "--near-real-time", action="store_true", help="Enable NRT scan.")
+    parser.add_argument(
+        "--strict-country-match",
+        dest="strict_country_match",
+        action="store_true",
+        help="Require canonical destination country match in at least two authoritative sources (default).",
+    )
+    parser.add_argument(
+        "--no-strict-country-match",
+        dest="strict_country_match",
+        action="store_false",
+        help="Disable strict country-match gating (not recommended).",
+    )
+    parser.set_defaults(strict_country_match=True)
     parser.add_argument("-O", "--output", type=str, help="Write report output to file path.")
     parser.add_argument("--json", action="store_true", help="Emit JSON output.")
     parser.add_argument(
         "--explain-score",
         action="store_true",
         help="Include weighted factor math and rationale.",
+    )
+    parser.add_argument(
+        "--debug-sources",
+        action="store_true",
+        help="Print per-source fetch/parse diagnostic status.",
+    )
+    parser.add_argument(
+        "--debug-normalization",
+        action="store_true",
+        help="Print country/city normalization and provider query mappings.",
     )
     parser.add_argument("--residence-country", type=str, help="Country of residence.")
     parser.add_argument("--clearance-level", type=str, help="Security clearance level.")
@@ -49,6 +73,7 @@ def _prompt_if_missing(args: argparse.Namespace) -> UserInput:
         destination_city=destination_city,
         long_report=bool(args.long_report),
         nrt_enabled=bool(args.near_real_time),
+        strict_country_match=bool(args.strict_country_match),
     )
 
 
@@ -57,7 +82,18 @@ def main() -> None:
     args = parser.parse_args()
     user_input = _prompt_if_missing(args)
 
-    result = run_assessment(user_input, show_progress=user_input.long_report)
+    source_debug: dict[str, dict[str, str]] = {}
+    try:
+        result = run_assessment(user_input, show_progress=user_input.long_report)
+    except AssessmentError as exc:
+        source_debug = exc.source_debug
+        print("RiskBase could not complete a live validated assessment.")
+        print(f"Reason: {exc}")
+        if args.debug_sources and source_debug:
+            print("\nSource Debug:")
+            print(json.dumps(source_debug, indent=2))
+        print("No static fallback was used. Please retry when sources are reachable.")
+        raise SystemExit(2) from exc
 
     if args.json:
         output_text = render_json(result)
@@ -72,6 +108,14 @@ def main() -> None:
     )
     output_text = output_text + disclaimer
     print(output_text)
+    source_debug = result.source_debug
+    normalization_debug = result.normalization_debug
+    if args.debug_normalization and normalization_debug:
+        print("\nNormalization Debug:")
+        print(json.dumps(normalization_debug, indent=2))
+    if args.debug_sources and source_debug:
+        print("\nSource Debug:")
+        print(json.dumps(source_debug, indent=2))
 
     if args.output:
         output_path = Path(args.output).expanduser().resolve()

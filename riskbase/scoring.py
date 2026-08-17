@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from .models import EvidenceItem, FactorScore, ValidationResult
+from .clearance import clearance_exposure_modifier
+from .models import EvidenceItem, FactorScore, UserInput, ValidationResult
 
 
 SEVERITY_POINTS = {
@@ -31,6 +32,10 @@ def _posture_from_score(score: float, posture_bands: list[dict[str, int | str]])
     return "Critical Concern"
 
 
+def classify_posture(score: float, taxonomy: dict) -> str:
+    return _posture_from_score(score, taxonomy["classification"]["posture_bands"])
+
+
 def _validation_lookup(validation: list[ValidationResult]) -> dict[str, ValidationResult]:
     return {v.claim_key: v for v in validation}
 
@@ -40,6 +45,7 @@ def score_assessment(
     validation: list[ValidationResult],
     taxonomy: dict,
     nrt_enabled: bool,
+    user_input: UserInput,
 ) -> tuple[float, str, list[FactorScore]]:
     weights = taxonomy["weights"]
     grouped: dict[str, list[EvidenceItem]] = defaultdict(list)
@@ -102,6 +108,19 @@ def score_assessment(
         )
 
     total = round(sum(f.weighted_score for f in factor_scores), 2)
+    modifier, rationale = clearance_exposure_modifier(user_input, total)
+    total = min(100.0, round(total + modifier, 2))
+    if modifier:
+        factor_scores.append(
+            FactorScore(
+                factor="clearance_exposure_modifier",
+                base_score=modifier,
+                weight=1.0,
+                weighted_score=modifier,
+                confidence=0.85,
+                rationale=rationale,
+            )
+        )
     posture = _posture_from_score(total, taxonomy["classification"]["posture_bands"])
     return total, posture, factor_scores
 

@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "name": "riskbase-provider-aliases",
+  "updated_at": "2026-08-17T00:00:00Z",
+  "canonical_country_aliases": {
+    "us": "united states",
+    "u.s.": "united states",
+    "u.s.a.": "united states",
+    "u s a": "united states",
+    "usa": "united states",
+    "u s": "united states",
+    "united states of america": "united states",
+    "america": "united states",
+    "uk": "united kingdom",
+    "u.k.": "united kingdom",
+    "uae": "united arab emirates",
+    "u.a.e.": "united arab emirates"
+  },
+  "provider_slugs": {
+    "uk_fcdo_travel_advice": {
+      "united states": "usa",
+      "united kingdom": "united-kingdom"
+    },
+    "canada_travel_advisories": {
+      "united states": "united-states",
+      "united kingdom": "united-kingdom"
+    },
+    "us_state_travel_advisories_api": {
+      "united states": "United States"
+    },
+    "us_state_travel_advisories_api_mirror": {
+      "united states": "United States"
+    },
+    "us_state_travel_rss": {
+      "united states": "United States"
+    }
+  },
+  "canonical_city_aliases": {
+    "nyc": "new york",
+    "new york city": "new york",
+    "dc": "washington",
+    "d.c.": "washington",
+    "washington dc": "washington",
+    "la": "los angeles",
+    "l.a.": "los angeles",
+    "nola": "new orleans",
+    "st petersburg": "saint petersburg",
+    "st. petersburg": "saint petersburg"
+  },
+  "provider_city_aliases": {
+    "default": {
+      "washington": "washington-dc",
+      "new york": "new-york-city"
+    }
+  }
+}
