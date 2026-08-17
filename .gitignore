@@ -1,4 +1,5 @@
 .riskbase/
 .venv/
+Reports/
 __pycache__/
 *.pyc

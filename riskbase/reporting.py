@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import asdict
 
 from .models import AssessmentResult
@@ -9,6 +10,25 @@ from .scoring import FACTOR_LABELS
 
 def _fmt_pct(v: float) -> str:
     return f"{round(v * 100, 1)}%"
+
+
+CLAIM_MEANING = {
+    "official_advisory": "Government travel advisory posture for the destination.",
+    "political_unrest": "Likelihood of protests, civil disorder, or instability affecting movement.",
+    "violent_crime_kidnapping": "Threat of violent crime, armed robbery, or kidnapping exposure.",
+    "terrorism_organized_violence": "Risk of terrorism, insurgency, or organized violence events.",
+    "health_bio_environmental": "Public health and environmental conditions that can degrade safety.",
+    "infrastructure_transport": "Transport and infrastructure reliability impacting movement routes.",
+}
+
+CLAIM_WHY_MATTERS = {
+    "official_advisory": "Advisory levels condense broad national risk and often trigger internal travel policy checks.",
+    "political_unrest": "Civil disruption can close roads, delay flights, and trigger sudden security posture changes.",
+    "violent_crime_kidnapping": "These threats directly affect personal safety and movement viability.",
+    "terrorism_organized_violence": "Low-frequency, high-impact events can rapidly invalidate normal travel assumptions.",
+    "health_bio_environmental": "Health and environment risks can reduce operational endurance and medical access.",
+    "infrastructure_transport": "Route reliability determines whether plans are executable under real conditions.",
+}
 
 
 def render_quick_report(result: AssessmentResult) -> str:
@@ -64,6 +84,32 @@ def render_long_report(result: AssessmentResult, explain_score: bool = False) ->
             f"- {val.claim_key}: {state} | severity={val.severity} | "
             f"sources={val.independent_sources} | reason={val.reason}"
         )
+
+    grouped_evidence: dict[str, list] = defaultdict(list)
+    for ev in result.evidence:
+        grouped_evidence[ev.claim_key].append(ev)
+
+    lines.extend(["", "Flagged Events Deep Dive:"])
+    flagged = [v for v in result.validation if v.severity in {"elevated", "high", "critical"} or not v.validated]
+    if not flagged:
+        lines.append("- No elevated/high/critical findings were flagged in this run.")
+    for val in flagged:
+        label = FACTOR_LABELS.get(val.claim_key, val.claim_key)
+        status = "Validated" if val.validated else "Provisional"
+        lines.extend(
+            [
+                "",
+                f"- {label} [{val.severity.upper()} | {status}]",
+                f"  what this means: {CLAIM_MEANING.get(val.claim_key, 'Risk factor requires analyst review.')}",
+                f"  why you should care: {CLAIM_WHY_MATTERS.get(val.claim_key, 'This factor can impact movement safety and reliability.')}",
+                f"  evidence posture: {val.reason}",
+            ]
+        )
+        claim_events = grouped_evidence.get(val.claim_key, [])
+        for idx, ev in enumerate(claim_events[:4], start=1):
+            lines.append(
+                f"  event {idx}: {ev.source_name} | severity={ev.severity} | conf={_fmt_pct(ev.confidence)} | {ev.claim_text}"
+            )
 
     lines.extend(["", "Evidence Ledger:"])
     for ev in result.evidence:

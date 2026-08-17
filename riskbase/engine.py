@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from .config import load_source_registry, load_threat_taxonomy
 from .models import AssessmentResult, UserInput, utc_now_iso
-from .scoring import score_assessment, summarize_recommendations
+from .scoring import classify_posture, score_assessment, summarize_recommendations
 from .sources import SourceCollectionError, collect_baseline_evidence, collect_nrt_evidence
 from .validation import deduplicate_evidence, validate_claims
 
@@ -71,6 +71,8 @@ def run_assessment(user_input: UserInput, show_progress: bool = False) -> Assess
         nrt_enabled=user_input.nrt_enabled,
         user_input=user_input,
     )
+    # Hard consistency guard: posture always derives from final numeric score.
+    posture = classify_posture(score, taxonomy)
 
     official_validation = next((v for v in validation if v.claim_key == "official_advisory"), None)
     if official_validation and not official_validation.validated:
