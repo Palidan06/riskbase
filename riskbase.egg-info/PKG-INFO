@@ -1,3 +1,10 @@
+Metadata-Version: 2.4
+Name: riskbase
+Version: 0.1.0
+Summary: Internal terminal travel threat assessment tool.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
 # RiskBase
 
 RiskBase is an internal-only terminal application for rapid travel threat posture assessment and evidence-backed deep-dive reporting.
