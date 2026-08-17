@@ -12,6 +12,12 @@ SEVERITY_POINTS = {
     "high": 65,
     "critical": 90,
 }
+SEVERITY_WEIGHTS = {
+    "low": 1.0,
+    "elevated": 1.5,
+    "high": 2.2,
+    "critical": 3.2,
+}
 
 
 FACTOR_LABELS = {
@@ -26,10 +32,14 @@ FACTOR_LABELS = {
 
 
 def _posture_from_score(score: float, posture_bands: list[dict[str, int | str]]) -> str:
+    # Use min-score thresholds to avoid fractional gap errors (e.g., 24.2).
+    selected = posture_bands[0]
     for band in posture_bands:
-        if band["min_score"] <= score <= band["max_score"]:
-            return str(band["posture"])
-    return "Critical Concern"
+        if score >= band["min_score"]:
+            selected = band
+        else:
+            break
+    return str(selected["posture"])
 
 
 def classify_posture(score: float, taxonomy: dict) -> str:
@@ -86,8 +96,17 @@ def score_assessment(
             )
             continue
 
-        sev_points = [SEVERITY_POINTS.get(i.severity, 20) for i in items]
-        avg_points = sum(sev_points) / len(sev_points)
+        weighted_numerator = 0.0
+        weighted_denominator = 0.0
+        severities = []
+        for item in items:
+            sev = item.severity
+            severities.append(sev)
+            sev_points = SEVERITY_POINTS.get(sev, 20)
+            sev_weight = SEVERITY_WEIGHTS.get(sev, 1.0)
+            weighted_numerator += sev_points * sev_weight
+            weighted_denominator += sev_weight
+        avg_points = weighted_numerator / weighted_denominator if weighted_denominator else 0.0
         conf = sum(i.confidence for i in items) / len(items)
         val = val_map.get(factor)
         if val and not val.validated:
@@ -95,6 +114,15 @@ def score_assessment(
             rationale = "Signals found but not fully validated; score dampened."
         else:
             rationale = "Corroborated signal contribution applied."
+
+        # Mixed elevated protection: if corroborated elevated/high/critical evidence exists,
+        # prevent low-only dilution from collapsing the factor too far.
+        if val and val.validated and any(s in {"elevated", "high", "critical"} for s in severities):
+            avg_points = max(avg_points, 30.0)
+            rationale = (
+                rationale
+                + " Mixed-source elevated protection floor applied."
+            )
 
         factor_scores.append(
             FactorScore(

@@ -21,6 +21,35 @@ CONTINENT_NAMES = {
     "south america",
     "oceania",
 }
+AGENCY_OPTIONS: list[tuple[str, str]] = [
+    ("Department of Defense (DoD)", "DoD"),
+    ("Defense Intelligence Agency (DIA)", "DIA"),
+    ("Central Intelligence Agency (CIA)", "CIA"),
+    ("National Security Agency (NSA)", "NSA"),
+    ("National Geospatial-Intelligence Agency (NGA)", "NGA"),
+    ("National Reconnaissance Office (NRO)", "NRO"),
+    ("Federal Bureau of Investigation (FBI)", "FBI"),
+    ("Department of Homeland Security (DHS)", "DHS"),
+    ("U.S. Department of State (DoS)", "DoS"),
+    ("Department of Energy (DoE)", "DoE"),
+    ("Department of Justice (DoJ)", "DoJ"),
+    ("Department of the Treasury", "Treasury"),
+    ("Internal Revenue Service (IRS)", "IRS"),
+    ("U.S. Government (Other)", "USG-Other"),
+]
+AGENCY_ALLOWED = {value.lower() for _, value in AGENCY_OPTIONS}
+
+CLEARANCE_OPTIONS: list[tuple[str, str]] = [
+    ("No clearance / Public Trust", "Public Trust"),
+    ("Confidential", "Confidential"),
+    ("Secret", "Secret"),
+    ("Top Secret (TS)", "Top Secret"),
+    ("TS/SCI", "TS/SCI"),
+    ("TS/SCI w CI Poly (TS/SCI w CIP)", "TS/SCI w CIP"),
+    ("TS/SCI w Full Scope Poly", "TS/SCI w Full Scope Poly"),
+    ("TS/SCI w SAP access", "TS/SCI w SAP"),
+    ("Other (type manually)", "__custom__"),
+]
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -69,9 +98,41 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _prompt_if_missing(args: argparse.Namespace) -> UserInput:
+    def _select_numbered_option(title: str, options: list[tuple[str, str]]) -> str:
+        print(title)
+        for idx, (label, _) in enumerate(options, start=1):
+            print(f"  {idx}) {label}")
+        while True:
+            raw = input("Select option number: ").strip()
+            if not raw.isdigit():
+                print("Invalid selection. Enter a number.")
+                continue
+            idx = int(raw)
+            if idx < 1 or idx > len(options):
+                print(f"Invalid selection. Choose 1-{len(options)}.")
+                continue
+            return options[idx - 1][1]
+
     residence_country = args.residence_country or input("Country of residence: ").strip()
-    clearance_level = args.clearance_level or input("Security clearance level: ").strip()
-    agency = args.agency or input("Agency/Department: ").strip()
+    if args.clearance_level:
+        clearance_level = args.clearance_level
+    else:
+        selected = _select_numbered_option(
+            "Security clearance level (lowest to highest):",
+            CLEARANCE_OPTIONS,
+        )
+        if selected == "__custom__":
+            clearance_level = input("Enter custom clearance text: ").strip()
+        else:
+            clearance_level = selected
+
+    if args.agency:
+        agency = args.agency
+    else:
+        agency = _select_numbered_option(
+            "Agency/Department:",
+            AGENCY_OPTIONS,
+        )
     destination_country = args.destination_country or input("Destination country: ").strip()
     destination_city = args.destination_city
     if destination_city is None:
@@ -183,6 +244,18 @@ def _validate_destination_inputs(user_input: UserInput) -> tuple[bool, str]:
     return True, ""
 
 
+def _validate_agency_input(user_input: UserInput) -> tuple[bool, str]:
+    agency = user_input.agency.strip().lower()
+    if agency not in AGENCY_ALLOWED:
+        allowed_preview = ", ".join(value for _, value in AGENCY_OPTIONS[:8])
+        return (
+            False,
+            "Agency/Department is not a recognized U.S. government selector. "
+            f"Use one of the configured options (examples: {allowed_preview}, ...).",
+        )
+    return True, ""
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -199,6 +272,12 @@ def main() -> None:
             print(f"Input validation failed: {validation_message}")
             print("Please enter a valid destination country.")
             _reset_destination_only(args)
+            continue
+        valid_agency, agency_message = _validate_agency_input(user_input)
+        if not valid_agency:
+            print(f"Input validation failed: {agency_message}")
+            print("Please select a valid U.S. agency/department option.")
+            args.agency = None
             continue
 
         source_debug: dict[str, dict[str, str]] = {}

@@ -27,3 +27,7 @@ def load_provider_rules() -> dict[str, Any]:
 
 def load_provider_aliases() -> dict[str, Any]:
     return load_json(SPECS_DIR / "provider_aliases.v1.json")
+
+
+def load_validation_gates() -> dict[str, Any]:
+    return load_json(SPECS_DIR / "validation_gates.v1.json")

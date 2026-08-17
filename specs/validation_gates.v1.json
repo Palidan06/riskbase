@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "riskbase-validation-gates",
+  "updated_at": "2026-08-17T00:00:00Z",
+  "thresholds": {
+    "severe_false_negative_rate_max": 0.05,
+    "critical_precision_min": 0.70,
+    "calibration_monotonic_required": true,
+    "explainability_completeness_min": 1.0,
+    "high_band_recall_min": 0.80,
+    "elevated_band_recall_min": 0.80,
+    "score_mae_max": 18.0
+  }
+}

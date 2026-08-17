@@ -27,6 +27,19 @@ def _progress(seconds: int) -> None:
     print("\rGenerating curated report... done ")
 
 
+def _is_active_conflict_from_validation(validation: list) -> bool:
+    val_map = {v.claim_key: v for v in validation}
+    official = val_map.get("official_advisory")
+    if official and official.validated and official.severity == "critical":
+        return True
+    severe_claims = 0
+    for key in ("terrorism_organized_violence", "violent_crime_kidnapping", "political_unrest"):
+        v = val_map.get(key)
+        if v and v.validated and v.severity in {"high", "critical"}:
+            severe_claims += 1
+    return severe_claims >= 2
+
+
 def run_assessment(user_input: UserInput, show_progress: bool = False) -> AssessmentResult:
     taxonomy = load_threat_taxonomy()
     load_source_registry()  # Ensures source registry is present and parseable.
@@ -71,10 +84,20 @@ def run_assessment(user_input: UserInput, show_progress: bool = False) -> Assess
         nrt_enabled=user_input.nrt_enabled,
         user_input=user_input,
     )
+    official_validation = next((v for v in validation if v.claim_key == "official_advisory"), None)
+    if official_validation and official_validation.validated and official_validation.severity == "elevated":
+        # Elevated advisory floor: prevent under-calling consistent elevated posture.
+        score = max(score, 30.0)
+    if official_validation and official_validation.validated and official_validation.severity == "critical":
+        # Critical advisory floor is a minimum, not a maximum.
+        score = max(score, 75.0)
+    if _is_active_conflict_from_validation(validation):
+        # Active conflict / warzone floor should be stricter than generic critical.
+        # Also a minimum only; additional risks still raise score above this floor.
+        score = max(score, 85.0)
     # Hard consistency guard: posture always derives from final numeric score.
     posture = classify_posture(score, taxonomy)
 
-    official_validation = next((v for v in validation if v.claim_key == "official_advisory"), None)
     if official_validation and not official_validation.validated:
         raise AssessmentError(
             "Official advisory corroboration is incomplete at query time. "
