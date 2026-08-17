@@ -32,6 +32,18 @@ CLAIM_WHY_MATTERS = {
 
 
 SEVERITY_ORDER = {"low": 0, "elevated": 1, "high": 2, "critical": 3}
+CONFLICT_CLAIMS = {"terrorism_organized_violence", "violent_crime_kidnapping", "political_unrest"}
+CONFLICT_KEYWORDS = (
+    "active conflict",
+    "armed conflict",
+    "civil war",
+    "war zone",
+    "warzone",
+    "active hostilities",
+    "ongoing hostilities",
+    "military clashes",
+    "frontline fighting",
+)
 
 
 def _severity_max(values: list[str]) -> str:
@@ -56,15 +68,17 @@ def _factor_conflict_line(claim_events: list) -> str:
 
 def _is_active_conflict(result: AssessmentResult) -> bool:
     val_map = {v.claim_key: v for v in result.validation}
-    official = val_map.get("official_advisory")
-    if official and official.validated and official.severity == "critical":
-        return True
-    severe_claims = 0
-    for key in ("terrorism_organized_violence", "violent_crime_kidnapping", "political_unrest"):
-        v = val_map.get(key)
-        if v and v.validated and v.severity in {"high", "critical"}:
-            severe_claims += 1
-    return severe_claims >= 2
+    corroborating_sources: set[str] = set()
+    for ev in result.evidence:
+        if ev.claim_key not in CONFLICT_CLAIMS:
+            continue
+        val = val_map.get(ev.claim_key)
+        if not val or not val.validated or ev.severity not in {"high", "critical"}:
+            continue
+        text = f"{ev.claim_text} {str(ev.metadata.get('excerpt', ''))}".lower()
+        if any(keyword in text for keyword in CONFLICT_KEYWORDS):
+            corroborating_sources.add(ev.source_id)
+    return len(corroborating_sources) >= 2
 
 
 def _top_risk_drivers(result: AssessmentResult, count: int = 3) -> list[str]:

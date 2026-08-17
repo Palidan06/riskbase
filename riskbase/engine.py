@@ -27,17 +27,38 @@ def _progress(seconds: int) -> None:
     print("\rGenerating curated report... done ")
 
 
-def _is_active_conflict_from_validation(validation: list) -> bool:
+CONFLICT_CLAIMS = {"terrorism_organized_violence", "violent_crime_kidnapping", "political_unrest"}
+CONFLICT_KEYWORDS = (
+    "active conflict",
+    "armed conflict",
+    "civil war",
+    "war zone",
+    "warzone",
+    "active hostilities",
+    "ongoing hostilities",
+    "military clashes",
+    "frontline fighting",
+)
+
+
+def _has_conflict_keywords(text: str) -> bool:
+    lowered = text.lower()
+    return any(keyword in lowered for keyword in CONFLICT_KEYWORDS)
+
+
+def _is_active_conflict_from_evidence(evidence: list, validation: list) -> bool:
     val_map = {v.claim_key: v for v in validation}
-    official = val_map.get("official_advisory")
-    if official and official.validated and official.severity == "critical":
-        return True
-    severe_claims = 0
-    for key in ("terrorism_organized_violence", "violent_crime_kidnapping", "political_unrest"):
-        v = val_map.get(key)
-        if v and v.validated and v.severity in {"high", "critical"}:
-            severe_claims += 1
-    return severe_claims >= 2
+    corroborating_sources: set[str] = set()
+    for item in evidence:
+        if item.claim_key not in CONFLICT_CLAIMS:
+            continue
+        val = val_map.get(item.claim_key)
+        if not val or not val.validated or item.severity not in {"high", "critical"}:
+            continue
+        excerpt = str(item.metadata.get("excerpt", ""))
+        if _has_conflict_keywords(f"{item.claim_text} {excerpt}"):
+            corroborating_sources.add(item.source_id)
+    return len(corroborating_sources) >= 2
 
 
 def run_assessment(user_input: UserInput, show_progress: bool = False) -> AssessmentResult:
@@ -91,7 +112,7 @@ def run_assessment(user_input: UserInput, show_progress: bool = False) -> Assess
     if official_validation and official_validation.validated and official_validation.severity == "critical":
         # Critical advisory floor is a minimum, not a maximum.
         score = max(score, 75.0)
-    if _is_active_conflict_from_validation(validation):
+    if _is_active_conflict_from_evidence(evidence, validation):
         # Active conflict / warzone floor should be stricter than generic critical.
         # Also a minimum only; additional risks still raise score above this floor.
         score = max(score, 85.0)

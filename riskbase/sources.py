@@ -198,6 +198,7 @@ def _state_api_to_evidence(
     title = str(payload.get("Title", ""))
     summary = str(payload.get("Summary", ""))
     combined = f"{title} {summary}"
+    excerpt = combined[:1200]
     m = re.search(r"level\s*([1-4])", title, flags=re.IGNORECASE)
     level = int(m.group(1)) if m else 2
     advisory_sev = _severity_from_level(level)
@@ -232,7 +233,7 @@ def _state_api_to_evidence(
                 confidence=_severity_confidence(sev),
                 extraction_note="Live fetch and deterministic parse from US State API payload.",
                 event_id=_event_id(f"{key}:{source_id}:{claim_key}:{now}"),
-                metadata={"title": title, "link": payload.get("Link")},
+                metadata={"title": title, "link": payload.get("Link"), "excerpt": excerpt},
             )
         )
     return output
@@ -328,7 +329,7 @@ def collect_baseline_evidence(
                             confidence=_severity_confidence(sev),
                             extraction_note="Live fetch and deterministic parse from US State RSS advisory text.",
                             event_id=_event_id(f"{key}:{source_id}:{claim_key}:{now}"),
-                            metadata={"url": url},
+                            metadata={"url": url, "excerpt": rss_text[:1200]},
                         )
                     )
             elif source_type == "html":
@@ -363,7 +364,7 @@ def collect_baseline_evidence(
                             confidence=_severity_confidence(sev),
                             extraction_note=f"Live scrape and provider-rule parse from {url}",
                             event_id=_event_id(f"{key}:{source_id}:{claim_key}:{now}"),
-                            metadata={"url": url},
+                            metadata={"url": url, "excerpt": text[:1200]},
                         )
                     )
             source_debug[source_id] = {

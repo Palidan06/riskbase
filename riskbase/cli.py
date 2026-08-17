@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .audit import write_audit_log
@@ -37,8 +38,6 @@ AGENCY_OPTIONS: list[tuple[str, str]] = [
     ("Internal Revenue Service (IRS)", "IRS"),
     ("U.S. Government (Other)", "USG-Other"),
 ]
-AGENCY_ALLOWED = {value.lower() for _, value in AGENCY_OPTIONS}
-
 CLEARANCE_OPTIONS: list[tuple[str, str]] = [
     ("No clearance / Public Trust", "Public Trust"),
     ("Confidential", "Confidential"),
@@ -50,6 +49,36 @@ CLEARANCE_OPTIONS: list[tuple[str, str]] = [
     ("TS/SCI w SAP access", "TS/SCI w SAP"),
     ("Other (type manually)", "__custom__"),
 ]
+
+
+def _normalize_agency_token(value: str) -> str:
+    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
+def _agency_alias_map() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for label, canonical in AGENCY_OPTIONS:
+        aliases[_normalize_agency_token(canonical)] = canonical
+        aliases[_normalize_agency_token(label)] = canonical
+        aliases[_normalize_agency_token(canonical.replace("-", " "))] = canonical
+        label_without_paren = re.sub(r"\s*\([^)]*\)", "", label).strip()
+        aliases[_normalize_agency_token(label_without_paren)] = canonical
+    return aliases
+
+
+AGENCY_ALIASES = _agency_alias_map()
+
+
+def _resolve_agency_input(raw: str) -> str | None:
+    value = raw.strip()
+    if not value:
+        return None
+    if value.isdigit():
+        idx = int(value)
+        if 1 <= idx <= len(AGENCY_OPTIONS):
+            return AGENCY_OPTIONS[idx - 1][1]
+        return None
+    return AGENCY_ALIASES.get(_normalize_agency_token(value))
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -129,10 +158,16 @@ def _prompt_if_missing(args: argparse.Namespace) -> UserInput:
     if args.agency:
         agency = args.agency
     else:
-        agency = _select_numbered_option(
-            "Agency/Department:",
-            AGENCY_OPTIONS,
-        )
+        print("Agency/Department:")
+        for idx, (label, _) in enumerate(AGENCY_OPTIONS, start=1):
+            print(f"  {idx}) {label}")
+        while True:
+            raw = input("Type agency (e.g., CIA) or select option number: ").strip()
+            resolved = _resolve_agency_input(raw)
+            if resolved:
+                agency = resolved
+                break
+            print(f"Invalid selection. Type an agency (e.g., CIA) or choose 1-{len(AGENCY_OPTIONS)}.")
     destination_country = args.destination_country or input("Destination country: ").strip()
     destination_city = args.destination_city
     if destination_city is None:
@@ -245,14 +280,15 @@ def _validate_destination_inputs(user_input: UserInput) -> tuple[bool, str]:
 
 
 def _validate_agency_input(user_input: UserInput) -> tuple[bool, str]:
-    agency = user_input.agency.strip().lower()
-    if agency not in AGENCY_ALLOWED:
+    resolved = _resolve_agency_input(user_input.agency)
+    if not resolved:
         allowed_preview = ", ".join(value for _, value in AGENCY_OPTIONS[:8])
         return (
             False,
             "Agency/Department is not a recognized U.S. government selector. "
             f"Use one of the configured options (examples: {allowed_preview}, ...).",
         )
+    user_input.agency = resolved
     return True, ""
 
 
