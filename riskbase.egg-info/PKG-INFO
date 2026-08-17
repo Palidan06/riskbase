@@ -23,6 +23,13 @@ RiskBase is an internal-only terminal application for rapid travel threat postur
 python3 -m pip install -e .
 ```
 
+## Dev Setup (Recommended)
+
+```bash
+./scripts/dev-setup.sh
+source .venv/bin/activate
+```
+
 ## Usage
 
 ```bash
