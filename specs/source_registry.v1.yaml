@@ -1,0 +1,70 @@
+version: 1
+name: riskbase-source-registry
+updated_at: "2026-08-17T00:00:00Z"
+
+sources:
+  - id: us_state_travel_advisories
+    display_name: US State Department Travel Advisories
+    tier: tier1
+    category: advisory
+    endpoint: "https://cadataapi.state.gov/api/TravelAdvisories"
+    licensing: public_government_data
+    internal_use_allowed: true
+    downstream_redistribution_allowed: false
+    notes: "Use as baseline advisory input; include advisory timestamp."
+
+  - id: uk_fcdo_travel_advice
+    display_name: UK GOV Foreign Travel Advice
+    tier: tier1
+    category: advisory
+    endpoint: "https://www.gov.uk/api/content/foreign-travel-advice"
+    licensing: open_government_content
+    internal_use_allowed: true
+    downstream_redistribution_allowed: false
+    notes: "Country pages fetched by slug; use as corroborating advisory source."
+
+  - id: canada_travel_advisories
+    display_name: Government of Canada Travel Advisories
+    tier: tier1
+    category: advisory
+    endpoint: "https://data.international.gc.ca/travel-voyage/index-alpha-eng.json"
+    licensing: open_government_licence_canada
+    internal_use_allowed: true
+    downstream_redistribution_allowed: false
+    notes: "Use indexed JSON feed for risk and recency signals."
+
+  - id: reliefweb_disasters
+    display_name: ReliefWeb Disasters API
+    tier: tier2
+    category: humanitarian
+    endpoint: "https://api.reliefweb.int/v2/disasters"
+    licensing: partner_content_with_source_copyright_constraints
+    internal_use_allowed: true
+    downstream_redistribution_allowed: restricted
+    notes: "Require appname query parameter and preserve source attribution."
+
+  - id: premium_feed_placeholder
+    display_name: Premium Threat Intel Feed (Configurable)
+    tier: tier2
+    category: premium
+    endpoint: "configured_by_user"
+    licensing: contract_dependent
+    internal_use_allowed: unknown_until_contract_review
+    downstream_redistribution_allowed: unknown_until_contract_review
+    notes: "Disabled by default until legal/licensing review is recorded."
+
+  - id: open_local_social
+    display_name: Open Local Social Signals
+    tier: tier3
+    category: osint
+    endpoint: "varies"
+    licensing: platform_terms_apply
+    internal_use_allowed: conditional
+    downstream_redistribution_allowed: restricted
+    notes: "Must be treated as provisional until corroborated."
+
+policy:
+  include_unlicensed_sources: false
+  require_attribution_metadata: true
+  require_recorded_licensing_status: true
+  allow_premium_feed_only_if_explicitly_enabled: true

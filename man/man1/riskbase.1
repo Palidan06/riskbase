@@ -1,0 +1,61 @@
+.TH RISKBASE 1 "August 2026" "RiskBase 0.1.0" "User Commands"
+.SH NAME
+riskbase \- internal CLI for regional threat posture assessments
+.SH SYNOPSIS
+.B riskbase
+[\-LR] [\-NRT] [\-\-json] [\-\-explain-score] [\-O path]
+[\-\-residence-country value]
+[\-\-clearance-level value]
+[\-\-agency value]
+[\-\-destination-country value]
+[\-\-destination-city value]
+.SH DESCRIPTION
+.B riskbase
+produces a fast advisory posture and optional detailed evidence-backed report for travel movement decisions.
+It is intended for internal operational support only.
+.SH OPTIONS
+.TP
+.B \-LR, \-\-long-report
+Generate the detailed report format.
+.TP
+.B \-NRT, \-\-near-real-time
+Enable near-real-time supplemental signal pass.
+.TP
+.B \-O, \-\-output
+Write report output to a file.
+.TP
+.B \-\-json
+Output machine-readable JSON.
+.TP
+.B \-\-explain-score
+Print weighted score contribution details.
+.TP
+.B \-\-residence-country
+Country of residence input value.
+.TP
+.B \-\-clearance-level
+Security clearance level input value.
+.TP
+.B \-\-agency
+Agency/department input value.
+.TP
+.B \-\-destination-country
+Destination country input value.
+.TP
+.B \-\-destination-city
+Destination city input value (optional).
+.SH EXIT STATUS
+.B riskbase
+returns 0 on success and non-zero if execution fails.
+.SH SAFETY NOTICE
+RiskBase is decision-support tooling and must not be treated as sole authority for movement decisions.
+.SH EXAMPLES
+.TP
+Quick posture:
+.B riskbase
+.TP
+Long report to file:
+.B riskbase -LR -O albania.txt
+.TP
+NRT enhanced JSON output:
+.B riskbase -NRT --json

@@ -1,0 +1,49 @@
+Metadata-Version: 2.4
+Name: riskbase
+Version: 0.1.0
+Summary: Internal terminal travel threat assessment tool.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
+# RiskBase
+
+RiskBase is an internal-only terminal application for rapid travel threat posture assessment and evidence-backed deep-dive reporting.
+
+## Features
+
+- Fast advisory posture output.
+- Optional long report mode.
+- Near-real-time supplemental scan mode.
+- Multi-source validation states and confidence indicators.
+- Terminal output and optional file export.
+
+## Install
+
+```bash
+python3 -m pip install -e .
+```
+
+## Usage
+
+```bash
+riskbase
+riskbase -LR -O albania.txt
+riskbase -NRT --explain-score
+riskbase --json
+```
+
+## Man Page
+
+A man page is included at `man/man1/riskbase.1`.
+
+To install locally:
+
+```bash
+mkdir -p ~/.local/share/man/man1
+cp man/man1/riskbase.1 ~/.local/share/man/man1/
+man riskbase
+```
+
+## Safety Note
+
+RiskBase is decision support, not sole authority. Always combine output with organizational policy and live operational command guidance.

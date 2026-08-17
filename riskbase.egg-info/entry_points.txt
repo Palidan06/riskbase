@@ -1,0 +1,2 @@
+[console_scripts]
+riskbase = riskbase.cli:main

@@ -1,0 +1,75 @@
+version: 1
+name: riskbase-threat-taxonomy
+updated_at: "2026-08-17T00:00:00Z"
+description: >
+  Deterministic factor model for internal advisory posture scoring with
+  severity-aware validation requirements.
+
+classification:
+  score_range: [0, 100]
+  posture_bands:
+    - posture: Low Concern
+      min_score: 0
+      max_score: 24
+    - posture: Elevated Concern
+      min_score: 25
+      max_score: 49
+    - posture: High Concern
+      min_score: 50
+      max_score: 74
+    - posture: Critical Concern
+      min_score: 75
+      max_score: 100
+
+weights:
+  official_advisory: 0.24
+  political_unrest: 0.16
+  violent_crime_kidnapping: 0.16
+  terrorism_organized_violence: 0.17
+  health_bio_environmental: 0.10
+  infrastructure_transport: 0.09
+  recency_multiplier: 0.08
+
+validation_thresholds:
+  critical:
+    minimum_independent_sources: 3
+    allow_tier1_plus_corrob: true
+  high:
+    minimum_independent_sources: 2
+    allow_tier1_plus_corrob: true
+  elevated:
+    minimum_independent_sources: 2
+    allow_tier1_plus_corrob: true
+  low:
+    minimum_independent_sources: 2
+    allow_tier1_plus_corrob: true
+
+source_tiers:
+  tier1:
+    trust_label: authoritative
+    examples:
+      - travel.state.gov
+      - gov.uk
+      - travel.gc.ca
+      - who.int
+  tier2:
+    trust_label: established_intelligence_or_major_verified
+    examples:
+      - reliefweb.int
+      - reuters.com
+      - apnews.com
+  tier3:
+    trust_label: open_signal_or_community
+    examples:
+      - local_social_channels
+      - local_forums
+
+recency_windows_hours:
+  quick_assessment_default: 72
+  nrt_default: 12
+  nrt_max: 24
+
+reporting:
+  require_evidence_timestamp: true
+  require_validation_state: true
+  emit_unvalidated_signals: true
