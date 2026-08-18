@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .audit import write_audit_log
 from .engine import AssessmentError, run_assessment
+from .geovalidation import GeographyValidationError, validate_destination_geography
 from .models import UserInput
 from .reporting import render_json, render_long_report, render_quick_report
 
@@ -291,6 +292,15 @@ def _validate_destination_inputs(user_input: UserInput) -> tuple[bool, str]:
             False,
             "Destination state is required for U.S. city inputs to disambiguate location (example: Fairfield, CA).",
         )
+    try:
+        geo_ok, geo_message = validate_destination_geography(user_input)
+    except GeographyValidationError as exc:
+        return (
+            False,
+            f"Live geographic validation failed: {exc}. Please retry.",
+        )
+    if not geo_ok:
+        return False, geo_message
     return True, ""
 
 

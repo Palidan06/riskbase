@@ -176,10 +176,10 @@ def _normalize_country_name(value: str) -> str:
 
 
 def _should_enforce_locality_scope(user_input: UserInput, canonical_destination: str) -> bool:
-    # Domestic city lookups need strict locality scoping to avoid national page inflation.
-    # Foreign city lookups should retain country-level signals when city mention is sparse.
-    residence = _normalize_country_name(user_input.residence_country)
-    return bool(user_input.destination_city) and canonical_destination == residence == "united states"
+    # U.S. destination city lookups need strict locality scoping to avoid
+    # national advisory page inflation regardless of traveler residence.
+    # Foreign city lookups retain country-level signals when city mention is sparse.
+    return bool(user_input.destination_city) and canonical_destination == "united states"
 
 
 def _normalize_city_name(value: str | None) -> str:

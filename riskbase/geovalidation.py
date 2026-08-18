@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import urllib.parse
+import urllib.request
+
+from .models import UserInput
+
+
+class GeographyValidationError(RuntimeError):
+    pass
+
+
+def _fetch_json(url: str, timeout: int = 15) -> list[dict]:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "RiskBase/0.1 (+internal assessment tooling)",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return json.load(response)
+    except Exception:
+        # Some environments have Python TLS trust-store issues while system curl succeeds.
+        proc = subprocess.run(
+            ["curl", "-sS", "--max-time", str(timeout), url],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return json.loads(proc.stdout)
+
+
+def validate_destination_geography(user_input: UserInput) -> tuple[bool, str]:
+    country = user_input.destination_country.strip()
+    city = (user_input.destination_city or "").strip()
+    state = (user_input.destination_state or "").strip()
+    if not city:
+        return True, ""
+
+    params = {
+        "format": "jsonv2",
+        "limit": "3",
+        "country": country,
+        "city": city,
+    }
+    if state:
+        params["state"] = state
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
+    try:
+        rows = _fetch_json(url)
+    except Exception as exc:
+        raise GeographyValidationError(f"Could not validate destination geography: {exc}") from exc
+
+    if not rows:
+        if state:
+            return (
+                False,
+                f"No live geographic match found for '{city}, {state}, {country}'. "
+                "Please verify spelling or enter a real city/state combination.",
+            )
+        return (
+            False,
+            f"No live geographic match found for '{city}, {country}'. "
+            "Please verify spelling or provide state/province where applicable.",
+        )
+
+    return True, ""

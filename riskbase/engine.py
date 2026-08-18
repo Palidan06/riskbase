@@ -88,11 +88,7 @@ def _official_floor_allowed_for_locality(user_input: UserInput, evidence: list, 
     if not user_input.destination_city:
         return True
     destination_country = user_input.destination_country.strip().lower()
-    residence_country = user_input.residence_country.strip().lower()
-    if not (
-        destination_country in {"united states", "us", "usa", "united states of america"}
-        and residence_country in {"united states", "us", "usa", "united states of america"}
-    ):
+    if destination_country not in {"united states", "us", "usa", "united states of america"}:
         # For foreign city lookups, city mentions are often absent in official country advisories.
         return True
     locality_tokens = [user_input.destination_city.lower()]
@@ -116,12 +112,8 @@ def _critical_official_floor_allowed(user_input: UserInput, evidence: list, vali
     if not user_input.destination_city:
         return True
     destination_country = user_input.destination_country.strip().lower()
-    residence_country = user_input.residence_country.strip().lower()
-    is_domestic_us_city = (
-        destination_country in {"united states", "us", "usa", "united states of america"}
-        and residence_country in {"united states", "us", "usa", "united states of america"}
-    )
-    if is_domestic_us_city:
+    is_us_destination_city = destination_country in {"united states", "us", "usa", "united states of america"}
+    if is_us_destination_city:
         return _official_floor_allowed_for_locality(user_input, evidence, validation)
     if _is_critical_zone_country(user_input.destination_country):
         return True

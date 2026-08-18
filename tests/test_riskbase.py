@@ -216,6 +216,20 @@ class RiskBaseTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("Destination state is required", message)
 
+    @patch("riskbase.cli.validate_destination_geography", return_value=(False, "No live geographic match found"))
+    def test_invalid_fictional_city_is_rejected(self, _: object) -> None:
+        ui = UserInput(
+            residence_country="Russia",
+            clearance_level="Public Trust",
+            agency="CIA",
+            destination_country="USA",
+            destination_city="Smallville",
+            destination_state="Alabama",
+        )
+        valid, message = _validate_destination_inputs(ui)
+        self.assertFalse(valid)
+        self.assertIn("No live geographic match found", message)
+
     def test_city_query_does_not_apply_country_level_advisory_floor(self) -> None:
         ui = UserInput(
             residence_country="US",
@@ -257,6 +271,86 @@ class RiskBaseTests(unittest.TestCase):
                 extraction_note="x",
                 event_id="floor-2",
                 metadata={"excerpt": "General advisory language without Fairfield context."},
+            ),
+        ]
+        with patch(
+            "riskbase.engine.collect_baseline_evidence",
+            return_value=(mocked_evidence, {"uk_fcdo_travel_advice": {"status": "ok"}, "canada_travel_advisories": {"status": "ok"}}, {}),
+        ):
+            result = run_assessment(ui, show_progress=False)
+        self.assertLess(result.total_score, 30.0)
+
+    def test_us_city_query_still_scoped_when_residence_not_us(self) -> None:
+        ui = UserInput(
+            residence_country="ALB",
+            clearance_level="Public Trust",
+            agency="CIA",
+            destination_country="US",
+            destination_city="Omaha",
+            destination_state="Nebraska",
+            strict_country_match=False,
+        )
+        now = utc_now_iso()
+        mocked_evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="omaha-floor-1",
+                metadata={"excerpt": "Country-level advisory page for the United States."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="omaha-floor-2",
+                metadata={"excerpt": "General advisory text without Omaha or Nebraska."},
+            ),
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="terrorism_organized_violence",
+                claim_text="Low baseline.",
+                event_time=now,
+                fetched_at=now,
+                severity="low",
+                confidence=0.82,
+                extraction_note="x",
+                event_id="omaha-floor-3",
+                metadata={"excerpt": "No Omaha-specific warning."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="terrorism_organized_violence",
+                claim_text="Low baseline.",
+                event_time=now,
+                fetched_at=now,
+                severity="low",
+                confidence=0.82,
+                extraction_note="x",
+                event_id="omaha-floor-4",
+                metadata={"excerpt": "No Nebraska-specific warning."},
             ),
         ]
         with patch(
