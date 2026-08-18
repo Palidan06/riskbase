@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .audit import write_audit_log
 from .engine import AssessmentError, run_assessment
-from .geovalidation import GeographyValidationError, validate_destination_geography
+from .geovalidation import GeographyValidationError, validate_country_name, validate_destination_geography
 from .models import UserInput
 from .reporting import render_json, render_long_report, render_quick_report
 
@@ -317,6 +317,16 @@ def _validate_agency_input(user_input: UserInput) -> tuple[bool, str]:
     return True, ""
 
 
+def _validate_residence_country_input(user_input: UserInput) -> tuple[bool, str]:
+    try:
+        return validate_country_name(user_input.residence_country, field_label="country of residence")
+    except GeographyValidationError as exc:
+        return (
+            False,
+            f"Live geographic validation failed: {exc}. Please retry.",
+        )
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -329,6 +339,12 @@ def main() -> None:
         args.destination_country = user_input.destination_country
         args.destination_city = user_input.destination_city
         args.destination_state = user_input.destination_state
+        valid_residence, residence_message = _validate_residence_country_input(user_input)
+        if not valid_residence:
+            print(f"Input validation failed: {residence_message}")
+            print("Please enter a valid country of residence.")
+            args.residence_country = None
+            continue
         valid_destination, validation_message = _validate_destination_inputs(user_input)
         if not valid_destination:
             print(f"Input validation failed: {validation_message}")

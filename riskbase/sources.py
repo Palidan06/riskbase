@@ -95,6 +95,9 @@ def _extract_locality_windows(text: str, locality_tokens: list[str], radius: int
     for token in locality_tokens:
         if not token:
             continue
+        if len(token.strip()) < 3:
+            # Very short tokens like "ca" overmatch arbitrary words.
+            continue
         for match in re.finditer(re.escape(token.lower()), lowered):
             start = max(0, match.start() - radius)
             end = min(len(text), match.end() + radius)

@@ -230,6 +230,22 @@ class RiskBaseTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("No live geographic match found", message)
 
+    @patch("riskbase.cli.validate_country_name", return_value=(False, "No live geographic match found for country of residence"))
+    def test_invalid_residence_country_is_rejected(self, _: object) -> None:
+        from riskbase.cli import _validate_residence_country_input
+
+        ui = UserInput(
+            residence_country="ALKHJW",
+            clearance_level="Public Trust",
+            agency="CIA",
+            destination_country="USA",
+            destination_city="Omaha",
+            destination_state="Nebraska",
+        )
+        valid, message = _validate_residence_country_input(ui)
+        self.assertFalse(valid)
+        self.assertIn("No live geographic match found", message)
+
     def test_city_query_does_not_apply_country_level_advisory_floor(self) -> None:
         ui = UserInput(
             residence_country="US",
