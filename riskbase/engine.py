@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from .config import load_source_registry, load_threat_taxonomy
+from .config import load_critical_zone_policy, load_provider_aliases, load_source_registry, load_threat_taxonomy
 from .models import AssessmentResult, UserInput, utc_now_iso
 from .scoring import classify_posture, score_assessment, summarize_recommendations
 from .sources import SourceCollectionError, collect_baseline_evidence, collect_nrt_evidence
@@ -61,6 +61,75 @@ def _is_active_conflict_from_evidence(evidence: list, validation: list) -> bool:
     return len(corroborating_sources) >= 2
 
 
+def _validated_severe_conflict_count(validation: list) -> int:
+    val_map = {v.claim_key: v for v in validation}
+    severe_claims = 0
+    for key in CONFLICT_CLAIMS:
+        v = val_map.get(key)
+        if v and v.validated and v.severity in {"high", "critical"}:
+            severe_claims += 1
+    return severe_claims
+
+
+def _canonical_country(value: str) -> str:
+    aliases = load_provider_aliases().get("canonical_country_aliases", {})
+    normalized = "".join(ch.lower() if ch.isalnum() or ch.isspace() else " " for ch in value)
+    normalized = " ".join(normalized.split())
+    return aliases.get(normalized, normalized)
+
+
+def _is_critical_zone_country(destination_country: str) -> bool:
+    policy = load_critical_zone_policy()
+    critical_zone_countries = set(policy.get("critical_zone_countries", []))
+    return _canonical_country(destination_country) in critical_zone_countries
+
+
+def _official_floor_allowed_for_locality(user_input: UserInput, evidence: list, validation: list) -> bool:
+    if not user_input.destination_city:
+        return True
+    destination_country = user_input.destination_country.strip().lower()
+    residence_country = user_input.residence_country.strip().lower()
+    if not (
+        destination_country in {"united states", "us", "usa", "united states of america"}
+        and residence_country in {"united states", "us", "usa", "united states of america"}
+    ):
+        # For foreign city lookups, city mentions are often absent in official country advisories.
+        return True
+    locality_tokens = [user_input.destination_city.lower()]
+    if user_input.destination_state:
+        locality_tokens.append(user_input.destination_state.lower())
+    val_map = {v.claim_key: v for v in validation}
+    official_val = val_map.get("official_advisory")
+    if not official_val or not official_val.validated:
+        return False
+    corroborating_sources: set[str] = set()
+    for item in evidence:
+        if item.claim_key != "official_advisory":
+            continue
+        text = f"{item.claim_text} {str(item.metadata.get('excerpt', ''))}".lower()
+        if any(token in text for token in locality_tokens):
+            corroborating_sources.add(item.source_id)
+    return len(corroborating_sources) >= 2
+
+
+def _critical_official_floor_allowed(user_input: UserInput, evidence: list, validation: list) -> bool:
+    if not user_input.destination_city:
+        return True
+    destination_country = user_input.destination_country.strip().lower()
+    residence_country = user_input.residence_country.strip().lower()
+    is_domestic_us_city = (
+        destination_country in {"united states", "us", "usa", "united states of america"}
+        and residence_country in {"united states", "us", "usa", "united states of america"}
+    )
+    if is_domestic_us_city:
+        return _official_floor_allowed_for_locality(user_input, evidence, validation)
+    if _is_critical_zone_country(user_input.destination_country):
+        return True
+    # Foreign city query: only allow critical official floor with explicit
+    # corroborated conflict wording to avoid country-wide overcalls.
+    return _is_active_conflict_from_evidence(evidence, validation)
+
+
 def run_assessment(user_input: UserInput, show_progress: bool = False) -> AssessmentResult:
     taxonomy = load_threat_taxonomy()
     load_source_registry()  # Ensures source registry is present and parseable.
@@ -106,10 +175,21 @@ def run_assessment(user_input: UserInput, show_progress: bool = False) -> Assess
         user_input=user_input,
     )
     official_validation = next((v for v in validation if v.claim_key == "official_advisory"), None)
-    if official_validation and official_validation.validated and official_validation.severity == "elevated":
+    official_floor_allowed = _official_floor_allowed_for_locality(user_input, evidence, validation)
+    if (
+        official_floor_allowed
+        and official_validation
+        and official_validation.validated
+        and official_validation.severity == "elevated"
+    ):
         # Elevated advisory floor: prevent under-calling consistent elevated posture.
         score = max(score, 30.0)
-    if official_validation and official_validation.validated and official_validation.severity == "critical":
+    if (
+        official_validation
+        and official_validation.validated
+        and official_validation.severity == "critical"
+        and _critical_official_floor_allowed(user_input, evidence, validation)
+    ):
         # Critical advisory floor is a minimum, not a maximum.
         score = max(score, 75.0)
     if _is_active_conflict_from_evidence(evidence, validation):

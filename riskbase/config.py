@@ -31,3 +31,7 @@ def load_provider_aliases() -> dict[str, Any]:
 
 def load_validation_gates() -> dict[str, Any]:
     return load_json(SPECS_DIR / "validation_gates.v1.json")
+
+
+def load_critical_zone_policy() -> dict[str, Any]:
+    return load_json(SPECS_DIR / "critical_zone_policy.v1.json")

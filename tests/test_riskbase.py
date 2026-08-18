@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from riskbase.cli import _resolve_agency_input
+from riskbase.cli import _resolve_agency_input, _validate_destination_inputs
 from riskbase.engine import _is_active_conflict_from_evidence
 from riskbase.config import load_threat_taxonomy
 from riskbase.engine import run_assessment
@@ -202,6 +202,198 @@ class RiskBaseTests(unittest.TestCase):
         ]
         non_conflict_validation = validate_claims(non_conflict_evidence, taxonomy["validation_thresholds"])
         self.assertFalse(_is_active_conflict_from_evidence(non_conflict_evidence, non_conflict_validation))
+
+    def test_us_city_requires_state_for_disambiguation(self) -> None:
+        ui = UserInput(
+            residence_country="US",
+            clearance_level="Secret",
+            agency="CIA",
+            destination_country="United States",
+            destination_city="Fairfield",
+            destination_state=None,
+        )
+        valid, message = _validate_destination_inputs(ui)
+        self.assertFalse(valid)
+        self.assertIn("Destination state is required", message)
+
+    def test_city_query_does_not_apply_country_level_advisory_floor(self) -> None:
+        ui = UserInput(
+            residence_country="US",
+            clearance_level="SECRET",
+            agency="CIA",
+            destination_country="United States",
+            destination_city="Fairfield",
+            destination_state="California",
+            strict_country_match=False,
+        )
+        now = utc_now_iso()
+        mocked_evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="floor-1",
+                metadata={"excerpt": "Country-level advisory page for the United States."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="floor-2",
+                metadata={"excerpt": "General advisory language without Fairfield context."},
+            ),
+        ]
+        with patch(
+            "riskbase.engine.collect_baseline_evidence",
+            return_value=(mocked_evidence, {"uk_fcdo_travel_advice": {"status": "ok"}, "canada_travel_advisories": {"status": "ok"}}, {}),
+        ):
+            result = run_assessment(ui, show_progress=False)
+        self.assertLess(result.total_score, 30.0)
+
+    def test_foreign_city_query_can_apply_country_level_advisory_floor(self) -> None:
+        ui = UserInput(
+            residence_country="United States",
+            clearance_level="SECRET",
+            agency="CIA",
+            destination_country="Iraq",
+            destination_city="Baghdad",
+            destination_state=None,
+            strict_country_match=False,
+        )
+        now = utc_now_iso()
+        mocked_evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Avoid all travel.",
+                event_time=now,
+                fetched_at=now,
+                severity="critical",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-floor-1",
+                metadata={"excerpt": "Country-level advisory language for Iraq."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Avoid all travel.",
+                event_time=now,
+                fetched_at=now,
+                severity="critical",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-floor-2",
+                metadata={"excerpt": "General advisory language without explicit Baghdad token."},
+            ),
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="terrorism_organized_violence",
+                claim_text="Conflict is ongoing.",
+                event_time=now,
+                fetched_at=now,
+                severity="critical",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-floor-3",
+                metadata={"excerpt": "Active hostilities are present in affected areas."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="terrorism_organized_violence",
+                claim_text="Armed conflict impacts security environment.",
+                event_time=now,
+                fetched_at=now,
+                severity="high",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-floor-4",
+                metadata={"excerpt": "Armed conflict remains active."},
+            ),
+        ]
+        with patch(
+            "riskbase.engine.collect_baseline_evidence",
+            return_value=(mocked_evidence, {"uk_fcdo_travel_advice": {"status": "ok"}, "canada_travel_advisories": {"status": "ok"}}, {}),
+        ):
+            result = run_assessment(ui, show_progress=False)
+        self.assertGreaterEqual(result.total_score, 75.0)
+
+    def test_foreign_city_critical_official_without_conflict_does_not_floor(self) -> None:
+        ui = UserInput(
+            residence_country="United States",
+            clearance_level="SECRET",
+            agency="CIA",
+            destination_country="Tunisia",
+            destination_city="Tunis",
+            strict_country_match=False,
+        )
+        now = utc_now_iso()
+        mocked_evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Avoid all travel to some areas.",
+                event_time=now,
+                fetched_at=now,
+                severity="critical",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-no-conf-1",
+                metadata={"excerpt": "Country advisory text without explicit active conflict indicators."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Avoid all travel to specific zones.",
+                event_time=now,
+                fetched_at=now,
+                severity="critical",
+                confidence=0.9,
+                extraction_note="x",
+                event_id="foreign-no-conf-2",
+                metadata={"excerpt": "General warning text without warzone language."},
+            ),
+        ]
+        with patch(
+            "riskbase.engine.collect_baseline_evidence",
+            return_value=(mocked_evidence, {"uk_fcdo_travel_advice": {"status": "ok"}, "canada_travel_advisories": {"status": "ok"}}, {}),
+        ):
+            result = run_assessment(ui, show_progress=False)
+        self.assertLess(result.total_score, 75.0)
 
 
 if __name__ == "__main__":

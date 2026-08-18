@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "name": "riskbase-critical-zone-policy",
+  "updated_at": "2026-08-18T00:00:00Z",
+  "description": "Explicit critical-zone fallback for known active conflict geographies when foreign city advisories are city-sparse.",
+  "critical_zone_countries": [
+    "ukraine",
+    "sudan",
+    "somalia",
+    "iraq",
+    "afghanistan"
+  ]
+}

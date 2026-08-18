@@ -87,6 +87,30 @@ def _apply_patterns(text: str, patterns: list[dict[str, str]], fallback: str) ->
     return detected
 
 
+def _extract_locality_windows(text: str, locality_tokens: list[str], radius: int = 500) -> str:
+    if not locality_tokens:
+        return text
+    lowered = text.lower()
+    windows: list[str] = []
+    for token in locality_tokens:
+        if not token:
+            continue
+        for match in re.finditer(re.escape(token.lower()), lowered):
+            start = max(0, match.start() - radius)
+            end = min(len(text), match.end() + radius)
+            windows.append(text[start:end])
+    return " ".join(windows).strip()
+
+
+def _apply_patterns_locality_aware(
+    text: str, patterns: list[dict[str, str]], fallback: str, locality_tokens: list[str]
+) -> tuple[str, bool]:
+    scoped_text = _extract_locality_windows(text, locality_tokens)
+    if locality_tokens and not scoped_text:
+        return fallback, False
+    return _apply_patterns(scoped_text, patterns, fallback=fallback), True
+
+
 def _severity_confidence(severity: str, source_tier: str = "tier1") -> float:
     base = {
         "low": 0.82,
@@ -151,6 +175,13 @@ def _normalize_country_name(value: str) -> str:
     return canonical_map.get(normalized, normalized)
 
 
+def _should_enforce_locality_scope(user_input: UserInput, canonical_destination: str) -> bool:
+    # Domestic city lookups need strict locality scoping to avoid national page inflation.
+    # Foreign city lookups should retain country-level signals when city mention is sparse.
+    residence = _normalize_country_name(user_input.residence_country)
+    return bool(user_input.destination_city) and canonical_destination == residence == "united states"
+
+
 def _normalize_city_name(value: str | None) -> str:
     if not value:
         return ""
@@ -158,6 +189,13 @@ def _normalize_city_name(value: str | None) -> str:
     canonical_map = aliases_cfg.get("canonical_city_aliases", {})
     normalized = re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
     return canonical_map.get(normalized, normalized)
+
+
+def _normalize_state_name(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    return normalized
 
 
 def _provider_city_value(city: str, provider_id: str) -> str:
@@ -194,6 +232,7 @@ def _state_api_to_evidence(
     payload: dict[str, Any],
     key: str,
     now: str,
+    locality_tokens: list[str] | None = None,
 ) -> list[EvidenceItem]:
     title = str(payload.get("Title", ""))
     summary = str(payload.get("Summary", ""))
@@ -218,7 +257,9 @@ def _state_api_to_evidence(
             sev = advisory_sev
         else:
             factor_patterns = rules.get("factor_patterns", {}).get(claim_key, [])
-            sev = _apply_patterns(combined, factor_patterns, fallback="low")
+            sev, _ = _apply_patterns_locality_aware(
+                combined, factor_patterns, fallback="low", locality_tokens=(locality_tokens or [])
+            )
         output.append(
             EvidenceItem(
                 source_id=source_id,
@@ -241,12 +282,16 @@ def _state_api_to_evidence(
 
 def _rss_text_for_destination(xml_text: str, destination: str) -> str:
     country = _normalize_country_name(destination)
-    # Keep this simple and deterministic: find the first item block matching country.
     items = re.findall(r"<item>(.*?)</item>", xml_text, flags=re.DOTALL | re.IGNORECASE)
     for item in items:
-        cleaned = re.sub(r"<[^>]+>", " ", item)
-        cleaned = re.sub(r"\\s+", " ", unescape(cleaned)).strip()
-        if country in _normalize_country_name(cleaned):
+        title_match = re.search(r"<title>(.*?)</title>", item, flags=re.DOTALL | re.IGNORECASE)
+        if not title_match:
+            continue
+        title = re.sub(r"\s+", " ", unescape(title_match.group(1))).strip()
+        title_country = _normalize_country_name(title.split(" - ")[0].strip())
+        if title_country == country:
+            cleaned = re.sub(r"<[^>]+>", " ", item)
+            cleaned = re.sub(r"\s+", " ", unescape(cleaned)).strip()
             return cleaned
     return ""
 
@@ -257,7 +302,11 @@ def collect_baseline_evidence(
     destination = user_input.destination_country.strip().lower()
     canonical_destination = _normalize_country_name(destination)
     city = _normalize_city_name(user_input.destination_city)
-    key = f"{destination}:{city}"
+    state = _normalize_state_name(user_input.destination_state)
+    locality_tokens = [city, state]
+    enforce_locality_scope = _should_enforce_locality_scope(user_input, canonical_destination)
+    pattern_scope_tokens = locality_tokens if enforce_locality_scope else []
+    key = f"{destination}:{state}:{city}"
     now = utc_now_iso()
     provider_rules = load_provider_rules().get("providers", {})
     base: list[EvidenceItem] = []
@@ -267,6 +316,8 @@ def collect_baseline_evidence(
         "canonical_destination_country": canonical_destination,
         "raw_destination_city": (user_input.destination_city or "").strip(),
         "canonical_destination_city": city,
+        "raw_destination_state": (user_input.destination_state or "").strip(),
+        "canonical_destination_state": state,
     }
 
     for source_id, source_name, url, source_type in _live_advisory_sources(destination):
@@ -287,7 +338,11 @@ def collect_baseline_evidence(
                     raise RuntimeError("Destination not found in API payload.")
                 m = re.search(r"level\s*([1-4])", str(entry.get("Title", "")), flags=re.IGNORECASE)
                 advisory_sev = _severity_from_level(int(m.group(1))) if m else "elevated"
-                base.extend(_state_api_to_evidence(source_id, source_name, entry, key, now))
+                base.extend(
+                    _state_api_to_evidence(
+                        source_id, source_name, entry, key, now, locality_tokens=pattern_scope_tokens
+                    )
+                )
             elif source_type == "xml":
                 req = urllib.request.Request(url, headers={"User-Agent": "RiskBase/0.1"})
                 with urllib.request.urlopen(req, timeout=15) as response:
@@ -314,7 +369,9 @@ def collect_baseline_evidence(
                         sev = advisory_sev
                     else:
                         factor_patterns = rules.get("factor_patterns", {}).get(claim_key, [])
-                        sev = _apply_patterns(rss_text, factor_patterns, fallback="low")
+                        sev, _ = _apply_patterns_locality_aware(
+                            rss_text, factor_patterns, fallback="low", locality_tokens=pattern_scope_tokens
+                        )
                     base.append(
                         EvidenceItem(
                             source_id=source_id,
@@ -349,7 +406,9 @@ def collect_baseline_evidence(
                         sev = advisory_sev
                     else:
                         factor_patterns = rules.get("factor_patterns", {}).get(claim_key, [])
-                        sev = _apply_patterns(text, factor_patterns, fallback="low")
+                        sev, _ = _apply_patterns_locality_aware(
+                            text, factor_patterns, fallback="low", locality_tokens=pattern_scope_tokens
+                        )
                     base.append(
                         EvidenceItem(
                             source_id=source_id,

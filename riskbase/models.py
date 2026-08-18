@@ -16,6 +16,7 @@ class UserInput:
     agency: str
     destination_country: str
     destination_city: str | None = None
+    destination_state: str | None = None
     long_report: bool = False
     nrt_enabled: bool = False
     strict_country_match: bool = True

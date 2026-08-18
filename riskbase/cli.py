@@ -22,6 +22,7 @@ CONTINENT_NAMES = {
     "south america",
     "oceania",
 }
+US_COUNTRY_ALIASES = {"us", "u s", "usa", "u s a", "united states", "united states of america"}
 AGENCY_OPTIONS: list[tuple[str, str]] = [
     ("Department of Defense (DoD)", "DoD"),
     ("Defense Intelligence Agency (DIA)", "DIA"),
@@ -123,6 +124,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--agency", type=str, help="Agency or department.")
     parser.add_argument("--destination-country", type=str, help="Destination country.")
     parser.add_argument("--destination-city", type=str, help="Destination city (optional).")
+    parser.add_argument("--destination-state", type=str, help="Destination state/province (optional).")
     return parser
 
 
@@ -173,6 +175,10 @@ def _prompt_if_missing(args: argparse.Namespace) -> UserInput:
     if destination_city is None:
         prompt_city = input("Destination city (optional): ").strip()
         destination_city = prompt_city if prompt_city else None
+    destination_state = args.destination_state
+    if destination_city and destination_state is None:
+        prompt_state = input("Destination state/province (optional, required for U.S. city): ").strip()
+        destination_state = prompt_state if prompt_state else None
 
     return UserInput(
         residence_country=residence_country,
@@ -180,6 +186,7 @@ def _prompt_if_missing(args: argparse.Namespace) -> UserInput:
         agency=agency,
         destination_country=destination_country,
         destination_city=destination_city,
+        destination_state=destination_state,
         long_report=bool(args.long_report),
         nrt_enabled=bool(args.near_real_time),
         strict_country_match=bool(args.strict_country_match),
@@ -197,11 +204,13 @@ def _reset_for_new_location(args: argparse.Namespace) -> None:
     args.agency = None
     args.destination_country = None
     args.destination_city = None
+    args.destination_state = None
 
 
 def _reset_destination_only(args: argparse.Namespace) -> None:
     args.destination_country = None
     args.destination_city = None
+    args.destination_state = None
 
 
 def _write_report_file(raw_output: str, text: str) -> Path:
@@ -266,6 +275,7 @@ def _normalize_geo(value: str | None) -> str:
 def _validate_destination_inputs(user_input: UserInput) -> tuple[bool, str]:
     destination_country = _normalize_geo(user_input.destination_country)
     destination_city = _normalize_geo(user_input.destination_city)
+    destination_state = _normalize_geo(user_input.destination_state)
 
     if destination_country in CONTINENT_NAMES:
         hint = ""
@@ -275,6 +285,11 @@ def _validate_destination_inputs(user_input: UserInput) -> tuple[bool, str]:
         return (
             False,
             f"Destination country '{user_input.destination_country}' appears to be a continent, not a country.{hint}",
+        )
+    if destination_city and destination_country in US_COUNTRY_ALIASES and not destination_state:
+        return (
+            False,
+            "Destination state is required for U.S. city inputs to disambiguate location (example: Fairfield, CA).",
         )
     return True, ""
 
@@ -303,6 +318,7 @@ def main() -> None:
         args.agency = user_input.agency
         args.destination_country = user_input.destination_country
         args.destination_city = user_input.destination_city
+        args.destination_state = user_input.destination_state
         valid_destination, validation_message = _validate_destination_inputs(user_input)
         if not valid_destination:
             print(f"Input validation failed: {validation_message}")
