@@ -505,6 +505,116 @@ class RiskBaseTests(unittest.TestCase):
             result = run_assessment(ui, show_progress=False)
         self.assertLess(result.total_score, 75.0)
 
+    def test_us_city_official_advisory_is_dampened_without_locality_mention(self) -> None:
+        taxonomy = load_threat_taxonomy()
+        now = utc_now_iso()
+        ui = UserInput(
+            residence_country="USA",
+            clearance_level="Public Trust",
+            agency="CIA",
+            destination_country="USA",
+            destination_city="Vallejo",
+            destination_state="California",
+            strict_country_match=False,
+        )
+        evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="us-city-official-1",
+                metadata={"excerpt": "General advisory page for travel to the United States."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="us-city-official-2",
+                metadata={"excerpt": "Country-level travel guidance without city references."},
+            ),
+        ]
+        validation = validate_claims(evidence, taxonomy["validation_thresholds"])
+        _, _, factors = score_assessment(
+            evidence=evidence,
+            validation=validation,
+            taxonomy=taxonomy,
+            nrt_enabled=False,
+            user_input=ui,
+        )
+        official = next(f for f in factors if f.factor == "official_advisory")
+        self.assertLessEqual(official.base_score, 10.0)
+
+    def test_us_city_official_advisory_kept_when_locality_mentioned(self) -> None:
+        taxonomy = load_threat_taxonomy()
+        now = utc_now_iso()
+        ui = UserInput(
+            residence_country="USA",
+            clearance_level="Public Trust",
+            agency="CIA",
+            destination_country="USA",
+            destination_city="Vallejo",
+            destination_state="California",
+            strict_country_match=False,
+        )
+        evidence = [
+            EvidenceItem(
+                source_id="uk_fcdo_travel_advice",
+                source_name="UK FCDO",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution in Vallejo.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="us-city-official-3",
+                metadata={"excerpt": "Vallejo, California specific guidance."},
+            ),
+            EvidenceItem(
+                source_id="canada_travel_advisories",
+                source_name="Canada",
+                tier="tier1",
+                category="advisory",
+                claim_key="official_advisory",
+                claim_text="Exercise a high degree of caution in Vallejo.",
+                event_time=now,
+                fetched_at=now,
+                severity="elevated",
+                confidence=0.85,
+                extraction_note="x",
+                event_id="us-city-official-4",
+                metadata={"excerpt": "City-specific risk notes for Vallejo."},
+            ),
+        ]
+        validation = validate_claims(evidence, taxonomy["validation_thresholds"])
+        _, _, factors = score_assessment(
+            evidence=evidence,
+            validation=validation,
+            taxonomy=taxonomy,
+            nrt_enabled=False,
+            user_input=ui,
+        )
+        official = next(f for f in factors if f.factor == "official_advisory")
+        self.assertGreaterEqual(official.base_score, 30.0)
+
 
 if __name__ == "__main__":
     unittest.main()

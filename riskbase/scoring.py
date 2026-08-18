@@ -50,6 +50,28 @@ def _validation_lookup(validation: list[ValidationResult]) -> dict[str, Validati
     return {v.claim_key: v for v in validation}
 
 
+def _is_us_destination_city(user_input: UserInput) -> bool:
+    destination = user_input.destination_country.strip().lower()
+    return bool(user_input.destination_city) and destination in {
+        "united states",
+        "us",
+        "usa",
+        "united states of america",
+    }
+
+
+def _official_advisory_mentions_locality(user_input: UserInput, items: list[EvidenceItem]) -> bool:
+    tokens = [user_input.destination_city or "", user_input.destination_state or ""]
+    tokens = [t.strip().lower() for t in tokens if t and len(t.strip()) >= 3]
+    if not tokens:
+        return False
+    for item in items:
+        text = f"{item.claim_text} {str(item.metadata.get('excerpt', ''))}".lower()
+        if any(token in text for token in tokens):
+            return True
+    return False
+
+
 def score_assessment(
     evidence: list[EvidenceItem],
     validation: list[ValidationResult],
@@ -115,9 +137,32 @@ def score_assessment(
         else:
             rationale = "Corroborated signal contribution applied."
 
+        # For U.S. destination city queries, foreign country-level U.S. advisories are
+        # context signals only unless locality is explicitly referenced.
+        if (
+            factor == "official_advisory"
+            and _is_us_destination_city(user_input)
+            and not _official_advisory_mentions_locality(user_input, items)
+        ):
+            avg_points = min(avg_points, 10.0)
+            rationale = (
+                rationale
+                + " Country-level official advisory dampened for U.S. city query "
+                "without city/state mention."
+            )
+
         # Mixed elevated protection: if corroborated elevated/high/critical evidence exists,
         # prevent low-only dilution from collapsing the factor too far.
-        if val and val.validated and any(s in {"elevated", "high", "critical"} for s in severities):
+        if (
+            val
+            and val.validated
+            and any(s in {"elevated", "high", "critical"} for s in severities)
+            and not (
+                factor == "official_advisory"
+                and _is_us_destination_city(user_input)
+                and not _official_advisory_mentions_locality(user_input, items)
+            )
+        ):
             avg_points = max(avg_points, 30.0)
             rationale = (
                 rationale
